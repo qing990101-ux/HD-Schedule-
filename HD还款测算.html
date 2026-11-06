@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>HD 还款测算</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { background: #f2f4f8; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    color: #1f2733; font-size: 14px; line-height: 1.5;
+  }
+  .app { max-width: 520px; margin: 0 auto; min-height: 100vh; background: #f2f4f8; padding-bottom: 32px; }
+
+  /* ===== 顶部 ===== */
+  .topbar {
+    background: linear-gradient(135deg, #1d4ed8, #2563eb);
+    color: #fff; padding: 16px 16px 18px;
+  }
+  .topbar h1 { font-size: 19px; font-weight: 600; letter-spacing: 1px; }
+  .topbar .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
+
+  /* ===== 卡片 ===== */
+  .card {
+    background: #fff; border-radius: 12px; margin: 12px 12px 0;
+    padding: 14px 14px 16px; box-shadow: 0 1px 3px rgba(31, 42, 68, .06);
+  }
+  .card h2 {
+    font-size: 14px; font-weight: 600; color: #1f2733;
+    display: flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  }
+  .card h2 .bar { width: 4px; height: 14px; border-radius: 2px; background: #2563eb; display: inline-block; }
+  .card h2 .tip { font-size: 11px; font-weight: 400; color: #8a93a6; margin-left: auto; }
+
+  /* ===== 表单 ===== */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 10px; }
+  .field label { display: block; font-size: 12px; color: #5b6572; margin-bottom: 4px; }
+  .field label .req { color: #ef4444; margin-left: 2px; }
+  .field input[type=number] {
+    width: 100%; height: 38px; border: 1px solid #d9dee8; border-radius: 8px;
+    padding: 0 10px; font-size: 15px; color: #1f2733; background: #fff; outline: none;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .field input[type=number]:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, .12); }
+  .field .readonly-input {
+    width: 100%; height: 38px; border: 1px dashed #c3cbd9; border-radius: 8px;
+    display: flex; align-items: center; padding: 0 10px;
+    font-size: 15px; color: #1d4ed8; font-weight: 600; background: #f6f8fc;
+    font-family: "SF Mono", Consolas, monospace;
+  }
+  .field .hint { font-size: 11px; color: #98a1b0; margin-top: 3px; }
+
+  /* 首付 金额/百分比 切换 */
+  .label-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .label-row label { margin-bottom: 0; }
+  .mini-seg { display: inline-flex; border: 1px solid #d9dee8; border-radius: 6px; overflow: hidden; flex: none; }
+  .mini-seg button {
+    height: 22px; padding: 0 10px; border: none; background: #fff;
+    font-size: 11px; color: #5b6572; cursor: pointer; font-weight: 400; border-radius: 0;
+  }
+  .mini-seg button.on { background: #2563eb; color: #fff; font-weight: 600; }
+  .field .input-unit { position: relative; }
+  .field .input-unit input { padding-right: 30px; }
+  .field .input-unit .unit {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    font-size: 12px; color: #8a93a6; pointer-events: none;
+  }
+
+  /* 直租/回租 分段选择 */
+  .seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #d9dee8; border-radius: 8px; overflow: hidden; }
+  .seg label {
+    height: 38px; display: flex; align-items: center; justify-content: center;
+    font-size: 14px; color: #5b6572; cursor: pointer; transition: all .15s; gap: 4px;
+  }
+  .seg input { display: none; }
+  .seg input:checked + span { color: #fff; }
+  .seg label:has(input:checked) { background: #2563eb; color: #fff; font-weight: 600; }
+
+  /* 开关 */
+  .switch-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 12px; padding: 10px 12px; background: #f6f8fc; border-radius: 8px;
+  }
+  .switch-row .txt { font-size: 13px; color: #3c4552; }
+  .switch-row .txt small { display: block; font-size: 11px; color: #8a93a6; margin-top: 1px; }
+  .switch { position: relative; width: 44px; height: 24px; flex: none; }
+  .switch input { display: none; }
+  .switch .track {
+    position: absolute; inset: 0; border-radius: 12px; background: #cbd5e1; transition: background .15s; cursor: pointer;
+  }
+  .switch .track::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px;
+    border-radius: 50%; background: #fff; transition: left .15s; box-shadow: 0 1px 2px rgba(0,0,0,.2);
+  }
+  .switch input:checked + .track { background: #2563eb; }
+  .switch input:checked + .track::after { left: 22px; }
+
+  .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  button {
+    height: 42px; border: none; border-radius: 10px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  button:active { opacity: .8; }
+  .btn-primary { background: #2563eb; color: #fff; }
+  .btn-plain { background: #eef1f6; color: #3c4552; }
+
+  /* ===== 汇总 ===== */
+  .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .s-item {
+    background: #f6f8fc; border-radius: 10px; padding: 10px 12px;
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  .s-item.wide { grid-column: 1 / -1; background: linear-gradient(135deg, #eff6ff, #e0ecff); }
+  .s-item .k { font-size: 11px; color: #5b6572; }
+  .s-item .v { font-size: 17px; font-weight: 700; color: #1d4ed8; font-family: "SF Mono", Consolas, monospace; margin-top: 2px; }
+  .s-item .v.small { font-size: 14px; color: #3c4552; }
+  .s-item .v .unit { font-size: 11px; font-weight: 400; color: #8a93a6; margin-left: 2px; }
+
+  .warn-bar {
+    display: none; margin-top: 10px; padding: 8px 10px; border-radius: 8px;
+    background: #fef3cd; color: #92400e; font-size: 12px; line-height: 1.45;
+  }
+  .warn-bar.show { display: block; }
+
+  /* ===== 表格 ===== */
+  .table-wrap {
+    overflow: auto; border: 1px solid #e4e8f0; border-radius: 10px;
+    -webkit-overflow-scrolling: touch; max-height: 60vh;
+  }
+  table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; font-size: 12px; }
+  thead th {
+    position: sticky; top: 0; z-index: 2;
+    background: #f1f4f9; color: #4b5563; font-weight: 600; font-size: 11px;
+    padding: 8px 8px; border-bottom: 1px solid #e4e8f0; white-space: nowrap; text-align: right;
+  }
+  thead th:first-child, tbody td:first-child { text-align: center; }
+  tbody td {
+    padding: 5px 8px; border-bottom: 1px solid #f0f2f7; text-align: right;
+    white-space: nowrap; font-family: "SF Mono", Consolas, monospace; color: #2a3442;
+  }
+  tbody tr:nth-child(even) { background: #fafbfd; }
+  tfoot td {
+    padding: 7px 8px; text-align: right; white-space: nowrap;
+    font-weight: 700; background: #f1f4f9; border-top: 1px solid #d9dee8;
+    font-family: "SF Mono", Consolas, monospace; font-size: 12px; color: #1f2733;
+    position: sticky; bottom: 0;
+  }
+  tfoot td:first-child { text-align: center; }
+  td.edit input {
+    width: 96px; height: 28px; border: 1px solid #ffe1a6; background: #fffdf5;
+    border-radius: 6px; text-align: right; font-size: 12px; padding: 0 5px;
+    font-family: "SF Mono", Consolas, monospace; color: #92400e; outline: none;
+  }
+  td.edit input:focus { border-color: #2563eb; background: #fff; color: #1f2733; box-shadow: 0 0 0 2px rgba(37,99,235,.12); }
+  td.edit.pay input { width: 104px; }
+  td.end-neg, td .neg { color: #dc2626; font-weight: 700; }
+  .col-tax-p { background: #fff7ed; } .col-tax-i { background: #f0fdf4; }
+  thead th.col-tax-p { background: #ffedd5; color: #9a3412; }
+  thead th.col-tax-i { background: #dcfce7; color: #166534; }
+
+  .note { font-size: 11px; color: #8a93a6; line-height: 1.6; margin-top: 10px; }
+  .note b { color: #5b6572; }
+
+  /* toast */
+  #toast {
+    position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
+    background: rgba(23, 31, 46, .92); color: #fff; font-size: 13px;
+    padding: 9px 16px; border-radius: 20px; z-index: 99; max-width: 86vw; text-align: center;
+    opacity: 0; pointer-events: none; transition: opacity .2s;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="topbar">
+    <h1>HD 还款测算</h1>
+    <div class="sub">工程机械融资租赁 · 等额本息 + 灵活调整 + 价税分离</div>
+  </div>
+
+  <!-- 参数 -->
+  <div class="card">
+    <h2><span class="bar"></span>项目参数<span class="tip">租赁金额 = 物价 − 首付</span></h2>
+    <div class="grid2">
+      <div class="field">
+        <label>物价（含税价款）<span class="req">*</span></label>
+        <input type="number" id="inPrice" value="1000000" min="0" step="any" inputmode="decimal">
+      </div>
+      <div class="field">
+        <div class="label-row">
+          <label>首付<span class="req">*</span></label>
+          <div class="mini-seg" id="downMode">
+            <button type="button" class="on" data-m="amount">金额</button>
+            <button type="button" data-m="pct">百分比</button>
+          </div>
+        </div>
+        <div class="input-unit">
+          <input type="number" id="inDown" value="200000" min="0" step="any" inputmode="decimal">
+          <span class="unit" id="downUnit">¥</span>
+        </div>
+        <div class="hint" id="downRatio">占比 20.0%</div>
+      </div>
+      <div class="field">
+        <label>租赁金额（自动计算）</label>
+        <div class="readonly-input" id="inAmount">¥800,000.00</div>
+      </div>
+      <div class="field">
+        <label>租赁期限（月）<span class="req">*</span></label>
+        <input type="number" id="inTerm" value="36" min="1" max="240" step="1" inputmode="numeric">
+      </div>
+      <div class="field">
+        <label>年利率（%）<span class="req">*</span></label>
+        <input type="number" id="inRate" value="6" min="0" step="any" inputmode="decimal">
+      </div>
+      <div class="field">
+        <label>业务类型<span class="req">*</span></label>
+        <div class="seg" id="segType">
+          <label><input type="radio" name="leaseType" value="direct" checked><span>直租</span></label>
+          <label><input type="radio" name="leaseType" value="back"><span>回租</span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="switch-row">
+      <div class="txt">调整某期后，后续期自动重新等额本息摊销
+        <small>关闭时：后续期保持基准值，尾差由最后一期兜底结清</small>
+      </div>
+      <div class="switch">
+        <input type="checkbox" id="inReamort" checked>
+        <label class="track" for="inReamort"></label>
+      </div>
+    </div>
+
+    <div class="btns">
+      <button class="btn-primary" id="btnGen">生成还款计划</button>
+      <button class="btn-plain" id="btnReset">重置为标准等额本息</button>
+    </div>
+  </div>
+
+  <!-- 汇总 -->
+  <div class="card">
+    <h2><span class="bar"></span>测算汇总</h2>
+    <div class="summary">
+      <div class="s-item wide">
+        <div class="k">租金总额（含税）</div>
+        <div class="v" id="sTotal">--</div>
+      </div>
+      <div class="s-item">
+        <div class="k">本金合计（含税）</div>
+        <div class="v small" id="sPrincipal">--</div>
+      </div>
+      <div class="s-item">
+        <div class="k">利息合计（含税）</div>
+        <div class="v small" id="sInterest">--</div>
+      </div>
+      <div class="s-item">
+        <div class="k">税额合计</div>
+        <div class="v small" id="sTax">--</div>
+      </div>
+      <div class="s-item">
+        <div class="k">本金不含税合计</div>
+        <div class="v small" id="sPNet">--</div>
+      </div>
+      <div class="s-item">
+        <div class="k">利息不含税合计</div>
+        <div class="v small" id="sINet">--</div>
+      </div>
+    </div>
+    <div class="warn-bar" id="warnBar"></div>
+  </div>
+
+  <!-- 计划表 -->
+  <div class="card">
+    <h2><span class="bar"></span>还款计划表
+      <span class="tip">黄底单元格可直接修改 · 改本金或改租金均可</span>
+    </h2>
+    <div class="table-wrap" id="tableWrap">
+      <table id="planTable">
+        <thead id="planHead"></thead>
+        <tbody id="planBody"></tbody>
+        <tfoot id="planFoot"></tfoot>
+      </table>
+    </div>
+    <div class="note" id="taxNote"></div>
+    <div class="btns" style="margin-top: 10px;">
+      <button class="btn-primary" id="btnPdf">导出 PDF（参数 + 计划表）</button>
+      <button class="btn-plain" id="btnCsv">导出 CSV</button>
+    </div>
+    <div class="note">
+      <b>计算口径</b><br>
+      · 基准计划按 PMT 等额本息生成：每期租金 = 租赁金额 × 月利率 × (1+月利率)^n ÷ ((1+月利率)^n − 1)；<br>
+      · 每期利息 = 期初剩余本金 × 月利率；若某期本金调整为 0，当期仅偿还利息；<br>
+      · 修改某期"本金"→ 当期租金 = 本金 + 利息；修改某期"租金"→ 当期本金 = 租金 − 利息；<br>
+      · 期末剩余本金自动归零（最后一期兜底结清）；若手工调整导致末期无法归零，将给出提示；<br>
+      · 金额均为含税口径，再按业务类型做价税分离。
+    </div>
+  </div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  var $ = function (id) { return document.getElementById(id); };
+  var els = {
+    price: $("inPrice"), down: $("inDown"), amount: $("inAmount"),
+    term: $("inTerm"), rate: $("inRate"), reamort: $("inReamort"),
+    body: $("planBody"), head: $("planHead"), foot: $("planFoot"),
+    toast: $("toast"), warn: $("warnBar"), taxNote: $("taxNote"), ratio: $("downRatio"),
+    downMode: $("downMode"), downUnit: $("downUnit")
+  };
+
+  var state = {
+    downMode: "amount", // amount | pct
+    edits: {},        // { idx: {type:'principal'|'payment', value:number} }
+    lastRows: [],     // 最近一次计算结果（用于导出）
+    basePrincipal: [] // 基准等额本息每期本金
+  };
+
+  /* ---------- 工具 ---------- */
+  function fmt(n) {
+    return (n < 0 ? "-" : "") + Math.abs(n).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function toast(msg) {
+    els.toast.textContent = msg;
+    els.toast.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { els.toast.classList.remove("show"); }, 2600);
+  }
+  function num(v) { var n = parseFloat(v); return isFinite(n) ? n : 0; }
+
+  function pmt(rate, nper, pv) {
+    if (pv === 0) return 0;
+    if (rate === 0) return pv / nper;
+    var f = Math.pow(1 + rate, nper);
+    return pv * rate * f / (f - 1);
+  }
+
+  /* ---------- 输入 ---------- */
+  function getInputs() {
+    var price = num(els.price.value);
+    var down;
+    if (state.downMode === "pct") {
+      down = price * num(els.down.value) / 100;   // 百分比 → 金额
+    } else {
+      down = num(els.down.value);
+    }
+    var term = Math.round(num(els.term.value));
+    var ratePct = num(els.rate.value);
+    var type = document.querySelector("input[name=leaseType]:checked").value;
+    return {
+      price: price, down: Math.min(down, price), amount: price - Math.min(down, price),
+      term: term, r: ratePct / 100 / 12, ratePct: ratePct, type: type
+    };
+  }
+
+  /* ---------- 核心：计算计划表 ---------- */
+  function buildBase(p) {
+    // 基准等额本息表（无任何调整）
+    var base = [], bal = p.amount;
+    for (var i = 0; i < p.term; i++) {
+      var interest = bal * p.r;
+      var principal;
+      if (i === p.term - 1) principal = bal;
+      else principal = pmt(p.r, p.term - i, bal) - interest;
+      base.push(principal);
+      bal -= principal;
+    }
+    return base;
+  }
+
+  function computeRows() {
+    var p = getInputs();
+    if (p.term < 1) { return null; }
+    state.basePrincipal = buildBase(p);
+
+    var rows = [], bal = p.amount;
+    for (var i = 0; i < p.term; i++) {
+      var interest = bal * p.r;
+      var principal = null;
+      var e = state.edits[i];
+
+      if (e) {
+        if (e.type === "principal") principal = e.value;
+        else principal = e.value - interest; // 改租金 → 反算本金
+        if (principal < 0) { principal = 0; }
+        if (bal > 0 && principal > bal) { principal = bal; }
+      } else if (i === p.term - 1) {
+        principal = bal;                       // 末期兜底结清
+      } else if (els.reamort.checked) {
+        principal = pmt(p.r, p.term - i, bal) - interest;  // 自动重摊
+      } else {
+        principal = state.basePrincipal[i];    // 保持基准
+        if (principal > bal) principal = bal;
+      }
+      if (principal < 0) principal = 0;
+
+      rows.push({
+        idx: i + 1, begin: bal, interest: interest,
+        principal: principal, payment: principal + interest,
+        end: bal - principal
+      });
+      bal -= principal;
+    }
+    return rows;
+  }
+
+  /* ---------- 价税分离 ---------- */
+  function splitTax(row, type) {
+    var pNet, pTax, iNet, iTax;
+    if (type === "direct") {          // 直租：本金、利息均按 13% 价税分离
+      pNet = row.principal / 1.13; pTax = row.principal - pNet;
+      iNet = row.interest / 1.13;  iTax = row.interest - iNet;
+    } else {                          // 回租：本金不计税，利息按 6% 价税分离
+      pNet = row.principal; pTax = 0;
+      iNet = row.interest / 1.06;  iTax = row.interest - iNet;
+    }
+    return { pNet: pNet, pTax: pTax, iNet: iNet, iTax: iTax, tax: pTax + iTax };
+  }
+
+  /* ---------- 渲染 ---------- */
+  function render() {
+    var p = getInputs();
+
+    // 租赁金额 & 首付提示
+    els.amount.textContent = "¥" + fmt(p.amount);
+    if (state.downMode === "pct") {
+      els.ratio.textContent = "首付金额 ¥" + fmt(p.down);
+    } else {
+      els.ratio.textContent = p.price > 0 ? ("占比 " + (p.down / p.price * 100).toFixed(1) + "%") : "";
+    }
+
+    var rows = computeRows();
+    if (!rows) { toast("请输入有效的租赁期限（≥1 个月）"); return; }
+    state.lastRows = rows;
+
+    // 表头
+    els.head.innerHTML =
+      "<tr><th>期次</th><th>期初本金</th><th class='col-tax-p'>本金(含税)</th><th>利息(含税)</th>" +
+      "<th class='col-tax-p'>租金合计</th><th>本金不含税</th><th class='col-tax-p'>本金税额</th>" +
+      "<th>利息不含税</th><th class='col-tax-i'>利息税额</th><th class='col-tax-i'>税额小计</th><th>期末本金</th></tr>";
+
+    // 表体（同时累计本金税额、利息税额）
+    var html = "", tP = 0, tI = 0, tPay = 0, tTax = 0, tPNet = 0, tINet = 0, tpTax = 0, tiTax = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i], t = splitTax(row, p.type);
+      tP += row.principal; tI += row.interest; tPay += row.payment;
+      tTax += t.tax; tPNet += t.pNet; tINet += t.iNet;
+      tpTax += t.pTax; tiTax += t.iTax;
+
+      html += "<tr>" +
+        "<td>" + row.idx + "</td>" +
+        "<td>" + fmt(row.begin) + "</td>" +
+        "<td class='edit'><input type='number' step='any' min='0' data-i='" + i + "' data-f='principal' value='" + round2(row.principal) + "'></td>" +
+        "<td>" + fmt(row.interest) + "</td>" +
+        "<td class='edit pay'><input type='number' step='any' min='0' data-i='" + i + "' data-f='payment' value='" + round2(row.payment) + "'></td>" +
+        "<td>" + fmt(t.pNet) + "</td>" +
+        "<td class='col-tax-p'>" + fmt(t.pTax) + "</td>" +
+        "<td>" + fmt(t.iNet) + "</td>" +
+        "<td class='col-tax-i'>" + fmt(t.iTax) + "</td>" +
+        "<td class='col-tax-i'>" + fmt(t.tax) + "</td>" +
+        "<td" + (Math.abs(row.end) > 0.005 ? " class='end-neg'" : "") + ">" + fmt(row.end) + "</td>" +
+        "</tr>";
+    }
+    els.body.innerHTML = html;
+
+    // 合计行
+    els.foot.innerHTML =
+      "<tr><td>合计</td><td>--</td><td>" + fmt(tP) + "</td><td>" + fmt(tI) + "</td>" +
+      "<td>" + fmt(tPay) + "</td><td>" + fmt(tPNet) + "</td><td class='col-tax-p'>" + fmt(tpTax) + "</td>" +
+      "<td>" + fmt(tINet) + "</td><td class='col-tax-i'>" + fmt(tiTax) + "</td>" +
+      "<td class='col-tax-i'>" + fmt(tTax) + "</td><td>" + fmt(rows[rows.length - 1].end) + "</td></tr>";
+
+    // 汇总卡片
+    $("sTotal").textContent = "¥" + fmt(tPay);
+    $("sPrincipal").textContent = "¥" + fmt(tP);
+    $("sInterest").textContent = "¥" + fmt(tI);
+    $("sTax").textContent = "¥" + fmt(tTax);
+    $("sPNet").textContent = "¥" + fmt(tPNet);
+    $("sINet").textContent = "¥" + fmt(tINet);
+
+    // 末期未结清提示
+    var endBal = rows[rows.length - 1].end;
+    if (Math.abs(endBal) > 0.005) {
+      els.warn.textContent = "⚠ 第 " + rows.length + " 期已按手工调整执行，期末仍有剩余本金 ¥" + fmt(endBal) + " 未结清，请检查末期金额。";
+      els.warn.classList.add("show");
+    } else {
+      els.warn.classList.remove("show");
+    }
+
+    // 口径说明
+    els.taxNote.innerHTML = p.type === "direct"
+      ? "当前为 <b>直租</b>：每期本金、利息均按 <b>13%</b> 价税分离（不含税 = 含税 ÷ 1.13，税额 = 含税 − 不含税）。"
+      : "当前为 <b>回租</b>：本金<b>不计税</b>（本金不含税 = 含税本金），利息按 <b>6%</b> 价税分离（不含税 = 含税 ÷ 1.06）。";
+  }
+
+  function round2(n) { return Math.round(n * 100) / 100; }
+
+  /* ---------- 交互 ---------- */
+  // 计划表内编辑（事件委托）
+  els.body.addEventListener("change", function (ev) {
+    var inp = ev.target;
+    if (inp.tagName !== "INPUT") return;
+    var i = parseInt(inp.dataset.i, 10);
+    var field = inp.dataset.f;
+    var v = num(inp.value);
+    if (v < 0) { v = 0; toast("金额不能为负，已按 0 处理"); }
+
+    var p = getInputs();
+    if (field === "payment") {
+      // 计算当期利息以校验
+      var rows = computeRows();
+      var interest = rows ? rows[i].interest : 0;
+      if (v < interest - 0.005) {
+        toast("当期租金低于应付利息 ¥" + fmt(interest) + "，本金按 0 处理，当期仅还利息");
+      }
+    }
+    state.edits[i] = { type: field, value: v };
+    render();
+  });
+
+  // 首付 金额/百分比 切换（切换时自动换算，保持实际首付不变）
+  els.downMode.addEventListener("click", function (ev) {
+    var btn = ev.target.closest("button");
+    if (!btn || btn.classList.contains("on")) return;
+    var p = getInputs();                    // 先取当前实际首付
+    state.downMode = btn.dataset.m;
+    Array.prototype.forEach.call(els.downMode.querySelectorAll("button"), function (b) {
+      b.classList.toggle("on", b === btn);
+    });
+    if (state.downMode === "pct") {
+      els.down.value = p.price > 0 ? +(p.down / p.price * 100).toFixed(2) : 0;
+      els.downUnit.textContent = "%";
+    } else {
+      els.down.value = +p.down.toFixed(2);
+      els.downUnit.textContent = "¥";
+    }
+    state.edits = {};
+    render();
+  });
+
+  // 参数变化 → 清空手工调整，重新生成
+  ["inPrice", "inDown", "inTerm", "inRate"].forEach(function (id) {
+    $(id).addEventListener("input", function () {
+      state.edits = {};
+      render();
+    });
+  });
+
+  // 类型切换只影响拆税，不清空调整
+  document.querySelectorAll("input[name=leaseType]").forEach(function (r) {
+    r.addEventListener("change", render);
+  });
+  els.reamort.addEventListener("change", render);
+
+  $("btnGen").addEventListener("click", function () { state.edits = {}; render(); toast("已按当前参数重新生成还款计划"); });
+  $("btnReset").addEventListener("click", function () { state.edits = {}; render(); toast("已重置为标准等额本息"); });
+
+  /* ---------- 导出 PDF（打印视图 → 浏览器另存为 PDF） ---------- */
+  function buildPrintDoc(p, rows) {
+    // 累计合计（仅保留 5 列：期次 / 期初剩余本金 / 本金(含税) / 利息(含税) / 租金合计）
+    var tP = 0, tI = 0, tPay = 0;
+    var body = "";
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      tP += r.principal; tI += r.interest; tPay += r.payment;
+      body += "<tr><td>" + r.idx + "</td><td>" + fmt(r.begin) +
+        "</td><td>" + fmt(r.principal) + "</td><td>" + fmt(r.interest) +
+        "</td><td>" + fmt(r.payment) + "</td></tr>";
+    }
+
+    var downLabel = state.downMode === "pct"
+      ? "首付（输入 " + num(els.down.value).toFixed(2) + "%）"
+      : "首付";
+    var params = [
+      ["物价（含税价款）", "¥" + fmt(p.price)],
+      [downLabel, "¥" + fmt(p.down) + (p.price > 0 ? "（占比 " + (p.down / p.price * 100).toFixed(2) + "%）" : "")],
+      ["租赁金额（物价 − 首付）", "¥" + fmt(p.amount)],
+      ["租赁期限", p.term + " 个月"],
+      ["年利率", p.ratePct.toFixed(2) + " %"],
+      ["业务类型", p.type === "direct" ? "直租（本金 13%、利息 13%）" : "回租（本金不计税、利息 6%）"],
+      ["每期租金（PMT 等额本息）", rows.length ? "¥" + fmt(rows[0].payment) : "--"]
+    ];
+    var paramHtml = "";
+    for (var j = 0; j < params.length; j++) {
+      paramHtml += "<tr><th>" + params[j][0] + "</th><td>" + params[j][1] + "</td></tr>";
+    }
+
+    var warn = "";
+    var endBal = rows[rows.length - 1].end;
+    if (Math.abs(endBal) > 0.005) {
+      warn = "<p class='warn'>⚠ 第 " + rows.length + " 期期末仍有剩余本金 ¥" + fmt(endBal) + " 未结清，请检查末期金额。</p>";
+    }
+
+    return "<!DOCTYPE html><html lang='zh-CN'><head><meta charset='UTF-8'><title>HD 还款测算</title><style>" +
+      "@page { size: A4 portrait; margin: 12mm; }" +
+      "* { margin:0; padding:0; box-sizing:border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }" +
+      "body { font-family:'PingFang SC','Microsoft YaHei','SimSun',sans-serif; font-size:10px; color:#222; }" +
+      "h1 { font-size:17px; text-align:center; letter-spacing:2px; margin-bottom:3px; }" +
+      ".sub { text-align:center; color:#777; font-size:10px; margin-bottom:12px; }" +
+      "h2 { font-size:12px; margin:12px 0 6px; border-left:4px solid #2563eb; padding-left:7px; }" +
+      "table { border-collapse:collapse; width:100%; }" +
+      "th, td { border:1px solid #b8bfcc; padding:3px 5px; text-align:right; white-space:nowrap; font-size:9px; font-family:'SF Mono',Consolas,'Microsoft YaHei',monospace; }" +
+      "th { background:#e8edf5; text-align:center; font-weight:600; }" +
+      "table.param th { text-align:left; width:32%; font-family:inherit; background:#f3f5f9; }" +
+      "table.param td { font-family:'SF Mono',Consolas,monospace; }" +
+      "td:first-child { text-align:center; font-family:inherit; }" +
+      "thead { display:table-header-group; } tfoot { display:table-footer-group; }" +
+      "tfoot td { font-weight:700; background:#eef1f6; }" +
+      ".note { font-size:9px; color:#666; margin-top:8px; line-height:1.6; }" +
+      ".warn { font-size:10px; color:#b45309; background:#fef3cd; border-radius:4px; padding:5px 8px; margin-top:8px; }" +
+      ".foot-line { margin-top:14px; display:flex; justify-content:space-between; color:#888; font-size:9px; }" +
+      "</style></head><body>" +
+      "<h1>HD 还款测算</h1>" +
+      "<div class='sub'>工程机械融资租赁 · PMT 等额本息 · 灵活调整 · 价税分离</div>" +
+      "<h2>一、项目参数</h2>" +
+      "<table class='param'>" + paramHtml + "</table>" +
+      "<h2>二、还款计划表</h2>" +
+      "<table><thead><tr><th>期次</th><th>期初剩余本金</th><th>本金(含税)</th><th>利息(含税)</th><th>租金合计</th></tr></thead>" +
+      "<tbody>" + body + "</tbody>" +
+      "<tfoot><tr><td>合计</td><td>--</td><td>" + fmt(tP) + "</td><td>" + fmt(tI) + "</td><td>" + fmt(tPay) + "</td></tr></tfoot></table>" +
+      warn +
+      "<div class='note'><b>计算口径：</b>每期利息 = 期初剩余本金 × 月利率（年利率 ÷ 12）；基准计划按 PMT 等额本息生成；手工调整期按调整值执行。金额均为含税口径（人民币元）。</div>" +
+      "<div class='foot-line'><span>HD 还款测算 · 单位：人民币元</span><span>生成时间：" +
+      new Date().toLocaleString("zh-CN", { hour12: false }) + "</span></div>" +
+      "</body></html>";
+  }
+
+  $("btnPdf").addEventListener("click", function () {
+    var p = getInputs();
+    var rows = state.lastRows;
+    if (!rows.length) { toast("请先生成还款计划"); return; }
+
+    var w = window.open("", "_blank");
+    if (!w) { toast("导出窗口被浏览器拦截，请允许本页弹出窗口后重试"); return; }
+    w.document.write(buildPrintDoc(p, rows));
+    w.document.close();
+    w.focus();
+    setTimeout(function () {
+      try { w.print(); } catch (e) { /* 用户可手动 Ctrl+P */ }
+    }, 400);
+    toast("已打开打印视图，在打印对话框选择“另存为 PDF”即可");
+  });
+
+  /* ---------- 导出 CSV ---------- */
+  $("btnCsv").addEventListener("click", function () {
+    var p = getInputs();
+    var rows = state.lastRows;
+    if (!rows.length) { toast("请先生成还款计划"); return; }
+
+    var head = ["期次", "期初剩余本金", "本金(含税)", "利息(含税)", "租金合计"];
+    var lines = ["HD 还款测算",
+      "业务类型," + (p.type === "direct" ? "直租(本金13%、利息13%)" : "回租(本金不计税、利息6%)"),
+      "物价," + p.price.toFixed(2), "首付," + p.down.toFixed(2) + ",占比," + (p.price > 0 ? (p.down / p.price * 100).toFixed(2) + "%" : "-"), "租赁金额," + p.amount.toFixed(2),
+      "租赁期限(月)," + p.term, "年利率(%)," + p.ratePct.toFixed(2), "",
+      head.join(",")];
+
+    var tP = 0, tI = 0, tPay = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      tP += r.principal; tI += r.interest; tPay += r.payment;
+      lines.push([r.idx, r.begin.toFixed(2), r.principal.toFixed(2), r.interest.toFixed(2), r.payment.toFixed(2)].join(","));
+    }
+    lines.push("");
+    lines.push(["合计", "", tP.toFixed(2), tI.toFixed(2), tPay.toFixed(2)].join(","));
+
+    var csv = "\uFEFF" + lines.join("\r\n");
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "HD还款测算计划表.csv";
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 300);
+    toast("CSV 已导出，可直接用 Excel 打开");
+  });
+
+  // 初始渲染
+  render();
+})();
+</script>
+</body>
+</html>
