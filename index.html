@@ -162,6 +162,26 @@
   .note { font-size: 11px; color: #8a93a6; line-height: 1.6; margin-top: 10px; }
   .note b { color: #5b6572; }
 
+  /* 计划表工具栏 */
+  .plan-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .plan-toolbar .tip { font-size: 11px; color: #8a93a6; margin-left: auto; }
+  .btn-apply {
+    height: 32px; padding: 0 14px; border: none; border-radius: 8px;
+    background: #1d4ed8; color: #fff; font-size: 13px; font-weight: 600;
+    cursor: pointer; flex: none; white-space: nowrap;
+  }
+  .btn-apply:active { opacity: .8; }
+
+  /* 拆税 开关按钮 */
+  .btn-tax {
+    height: 32px; padding: 0 14px; border: 1px solid #d9dee8; border-radius: 8px;
+    background: #fff; color: #5b6572; font-size: 13px; font-weight: 600;
+    cursor: pointer; flex: none; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 5px; user-select: none;
+  }
+  .btn-tax input { display: none; }
+  .btn-tax.on { background: #2563eb; color: #fff; border-color: #2563eb; }
+
   /* toast */
   #toast {
     position: fixed; left: 50%; bottom: 48px; transform: translateX(-50%);
@@ -273,9 +293,12 @@
 
   <!-- 计划表 -->
   <div class="card">
-    <h2><span class="bar"></span>还款计划表
-      <span class="tip">黄底单元格可直接修改 · 改本金或改租金均可</span>
-    </h2>
+    <h2><span class="bar"></span>还款计划表</h2>
+    <div class="plan-toolbar">
+      <button type="button" class="btn-apply" id="btnApplyAll" title="将首期「租金合计」套用至其余各期，差额由最后一期结清">租金适用全部期次</button>
+      <label class="btn-tax" id="btnSplitTax"><input type="checkbox" id="inSplitTax">拆税</label>
+      <span class="tip" id="planTip">黄底单元格可直接修改 · 改租金合计即可</span>
+    </div>
     <div class="table-wrap" id="tableWrap">
       <table id="planTable">
         <thead id="planHead"></thead>
@@ -285,7 +308,7 @@
     </div>
     <div class="note" id="taxNote"></div>
     <div class="btns" style="margin-top: 10px;">
-      <button class="btn-primary" id="btnPdf">导出 PDF（参数 + 计划表）</button>
+      <button class="btn-primary" id="btnPdf">导出 PDF</button>
       <button class="btn-plain" id="btnCsv">导出 CSV</button>
     </div>
     <div class="note">
@@ -311,14 +334,16 @@
     term: $("inTerm"), rate: $("inRate"), reamort: $("inReamort"),
     body: $("planBody"), head: $("planHead"), foot: $("planFoot"),
     toast: $("toast"), warn: $("warnBar"), taxNote: $("taxNote"), ratio: $("downRatio"),
-    downMode: $("downMode"), downUnit: $("downUnit")
+    downMode: $("downMode"), downUnit: $("downUnit"),
+    splitTaxChk: $("inSplitTax"), btnSplitTax: $("btnSplitTax"), planTip: $("planTip")
   };
 
   var state = {
     downMode: "amount", // amount | pct
     edits: {},        // { idx: {type:'principal'|'payment', value:number} }
     lastRows: [],     // 最近一次计算结果（用于导出）
-    basePrincipal: [] // 基准等额本息每期本金
+    basePrincipal: [], // 基准等额本息每期本金
+    showTax: false    // 拆税：false=精简5列，true=完整价税分离表
   };
 
   /* ---------- 工具 ---------- */
@@ -439,41 +464,57 @@
     state.lastRows = rows;
 
     // 表头
-    els.head.innerHTML =
-      "<tr><th>期次</th><th>期初本金</th><th class='col-tax-p'>本金(含税)</th><th>利息(含税)</th>" +
-      "<th class='col-tax-p'>租金合计</th><th>本金不含税</th><th class='col-tax-p'>本金税额</th>" +
-      "<th>利息不含税</th><th class='col-tax-i'>利息税额</th><th class='col-tax-i'>税额小计</th><th>期末本金</th></tr>";
+    var headCols = "<tr><th>期次</th><th>期初本金</th><th class='col-tax-p'>本金(含税)</th><th>利息(含税)</th>" +
+      "<th class='col-tax-p'>租金合计</th>";
+    if (state.showTax) {
+      headCols += "<th>本金不含税</th><th class='col-tax-p'>本金税额</th>" +
+        "<th>利息不含税</th><th class='col-tax-i'>利息税额</th><th class='col-tax-i'>税额小计</th><th>期末本金</th>";
+    }
+    headCols += "</tr>";
+    els.head.innerHTML = headCols;
 
-    // 表体（同时累计本金税额、利息税额）
+    // 表体（同时累计合计；showTax 时额外累计价税分离列）
     var html = "", tP = 0, tI = 0, tPay = 0, tTax = 0, tPNet = 0, tINet = 0, tpTax = 0, tiTax = 0;
     for (var i = 0; i < rows.length; i++) {
-      var row = rows[i], t = splitTax(row, p.type);
+      var row = rows[i];
       tP += row.principal; tI += row.interest; tPay += row.payment;
-      tTax += t.tax; tPNet += t.pNet; tINet += t.iNet;
-      tpTax += t.pTax; tiTax += t.iTax;
+
+      var pCell = state.showTax
+        ? "<td class='edit'><input type='number' step='any' min='0' data-i='" + i + "' data-f='principal' value='" + round2(row.principal) + "'></td>"
+        : "<td>" + fmt(row.principal) + "</td>";
 
       html += "<tr>" +
         "<td>" + row.idx + "</td>" +
         "<td>" + fmt(row.begin) + "</td>" +
-        "<td class='edit'><input type='number' step='any' min='0' data-i='" + i + "' data-f='principal' value='" + round2(row.principal) + "'></td>" +
+        pCell +
         "<td>" + fmt(row.interest) + "</td>" +
-        "<td class='edit pay'><input type='number' step='any' min='0' data-i='" + i + "' data-f='payment' value='" + round2(row.payment) + "'></td>" +
-        "<td>" + fmt(t.pNet) + "</td>" +
-        "<td class='col-tax-p'>" + fmt(t.pTax) + "</td>" +
-        "<td>" + fmt(t.iNet) + "</td>" +
-        "<td class='col-tax-i'>" + fmt(t.iTax) + "</td>" +
-        "<td class='col-tax-i'>" + fmt(t.tax) + "</td>" +
-        "<td" + (Math.abs(row.end) > 0.005 ? " class='end-neg'" : "") + ">" + fmt(row.end) + "</td>" +
-        "</tr>";
+        "<td class='edit pay'><input type='number' step='any' min='0' data-i='" + i + "' data-f='payment' value='" + round2(row.payment) + "'></td>";
+
+      if (state.showTax) {
+        var t = splitTax(row, p.type);
+        tTax += t.tax; tPNet += t.pNet; tINet += t.iNet;
+        tpTax += t.pTax; tiTax += t.iTax;
+        html += "<td>" + fmt(t.pNet) + "</td>" +
+          "<td class='col-tax-p'>" + fmt(t.pTax) + "</td>" +
+          "<td>" + fmt(t.iNet) + "</td>" +
+          "<td class='col-tax-i'>" + fmt(t.iTax) + "</td>" +
+          "<td class='col-tax-i'>" + fmt(t.tax) + "</td>" +
+          "<td" + (Math.abs(row.end) > 0.005 ? " class='end-neg'" : "") + ">" + fmt(row.end) + "</td>";
+      }
+      html += "</tr>";
     }
     els.body.innerHTML = html;
 
     // 合计行
-    els.foot.innerHTML =
-      "<tr><td>合计</td><td>--</td><td>" + fmt(tP) + "</td><td>" + fmt(tI) + "</td>" +
-      "<td>" + fmt(tPay) + "</td><td>" + fmt(tPNet) + "</td><td class='col-tax-p'>" + fmt(tpTax) + "</td>" +
-      "<td>" + fmt(tINet) + "</td><td class='col-tax-i'>" + fmt(tiTax) + "</td>" +
-      "<td class='col-tax-i'>" + fmt(tTax) + "</td><td>" + fmt(rows[rows.length - 1].end) + "</td></tr>";
+    var footCols = "<tr><td>合计</td><td>--</td><td>" + fmt(tP) + "</td><td>" + fmt(tI) + "</td>" +
+      "<td>" + fmt(tPay) + "</td>";
+    if (state.showTax) {
+      footCols += "<td>" + fmt(tPNet) + "</td><td class='col-tax-p'>" + fmt(tpTax) + "</td>" +
+        "<td>" + fmt(tINet) + "</td><td class='col-tax-i'>" + fmt(tiTax) + "</td>" +
+        "<td class='col-tax-i'>" + fmt(tTax) + "</td><td>" + fmt(rows[rows.length - 1].end) + "</td>";
+    }
+    footCols += "</tr>";
+    els.foot.innerHTML = footCols;
 
     // 汇总卡片
     $("sTotal").textContent = "¥" + fmt(tPay);
@@ -557,8 +598,40 @@
   });
   els.reamort.addEventListener("change", render);
 
+  // 拆税：勾选显示完整价税分离表（11列），不勾选显示精简5列（默认不勾选）
+  els.splitTaxChk.addEventListener("change", function () {
+    state.showTax = els.splitTaxChk.checked;
+    els.btnSplitTax.classList.toggle("on", state.showTax);
+    els.planTip.textContent = state.showTax
+      ? "黄底单元格可直接修改 · 改本金或改租金均可"
+      : "黄底单元格可直接修改 · 改租金合计即可";
+    render();
+  });
+
   $("btnGen").addEventListener("click", function () { state.edits = {}; render(); toast("已按当前参数重新生成还款计划"); });
   $("btnReset").addEventListener("click", function () { state.edits = {}; render(); toast("已重置为标准等额本息"); });
+
+  // 适用全部：将首期「租金合计」套用至第 1~n-1 期，最后一期兜底结清吸收差额，中间仍可手工改
+  $("btnApplyAll").addEventListener("click", function () {
+    var rows = computeRows();
+    if (!rows || !rows.length) { toast("请先生成还款计划"); return; }
+    var n = rows.length;
+    if (n < 2) { toast("期数不足，无需套用"); return; }
+    // 取首期「租金合计」当前值（优先读取表格内实际输入）
+    var firstInput = els.body.querySelector("input[data-i='0'][data-f='payment']");
+    var firstPay = firstInput ? num(firstInput.value) : rows[0].payment;
+    if (!isFinite(firstPay) || firstPay <= 0) {
+      toast("请先在第一期的「租金合计」中输入有效金额");
+      return;
+    }
+    // 第 1~n-1 期统一为首期租金；最后一期不设置 edit → 兜底结清吸收差额
+    state.edits = {};
+    for (var i = 0; i < n - 1; i++) {
+      state.edits[i] = { type: "payment", value: firstPay };
+    }
+    render();
+    toast("已将首期租金 ¥" + fmt(firstPay) + " 套用至第 1~" + (n - 1) + " 期，尾差由第 " + n + " 期结清");
+  });
 
   /* ---------- 导出 PDF（打印视图 → 浏览器另存为 PDF） ---------- */
   function buildPrintDoc(p, rows) {
